@@ -19,26 +19,29 @@ double wtime()
     return (double)t.tv_sec + (double)t.tv_usec * 1E-6;
 }
 const float G = 6.67e-11;
-void calculate_forces(struct particle *p, struct particle *f, float *m, int n)
+void calculate_forces(struct particle *p, struct particle *f, float *m, int n, int t)
 {
-#pragma omp for schedule(dynamic, 4) nowait
-    for (int i = 0; i < n; i++)
+    #pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
     {
-        for (int j = 0; j < n; j++)
+    #pragma omp for schedule(dynamic, 4) nowait
+        for (int i = 0; i < n; i++)
         {
-            if (i == j)
-                continue;
-            float dist = sqrtf(powf(p[i].x - p[j].x, 2) +
-                               powf(p[i].y - p[j].y, 2) +
-                               powf(p[i].z - p[j].z, 2));
-            float mag = (G * m[i] * m[j]) / powf(dist, 2);
-            struct particle dir = {
-                .x = p[j].x - p[i].x,
-                .y = p[j].y - p[i].y,
-                .z = p[j].z - p[i].z};
-            f[i].x += mag * dir.x / dist;
-            f[i].y += mag * dir.y / dist;
-            f[i].z += mag * dir.z / dist;
+            for (int j = 0; j < n; j++)
+            {
+                if (i == j)
+                    continue;
+                float dist = sqrtf(powf(p[i].x - p[j].x, 2) +
+                                powf(p[i].y - p[j].y, 2) +
+                                powf(p[i].z - p[j].z, 2));
+                float mag = (G * m[i] * m[j]) / powf(dist, 2);
+                struct particle dir = {
+                    .x = p[j].x - p[i].x,
+                    .y = p[j].y - p[i].y,
+                    .z = p[j].z - p[i].z};
+                f[i].x += mag * dir.x / dist;
+                f[i].y += mag * dir.y / dist;
+                f[i].z += mag * dir.z / dist;
+            }
         }
     }
 }
@@ -178,19 +181,30 @@ int main(int argc, char *argv[])
     }
     tinit += wtime();
     double dt = 1e-5;
+    char buff[100] = "# Threads   Speedup\n";
+    for (int t = 2; t <= 8; t+=2){
+    ttotal = wtime();
+    
     for (double t = 0; t <= 1; t += dt)
     { // Цикл по времени (модельному)
         tforces -= wtime();
-        calculate_forces(p, f, m, n); // Вычисление сил – O(N^2)
+        calculate_forces(p, f, m, n, t); // Вычисление сил – O(N^2)
         tforces += wtime();
         tmove -= wtime();
         move_particles(p, f, v, m, n, dt); // Перемещение тел O(N)
         tmove += wtime();
     }
     ttotal = wtime() - ttotal;
+    printf("Threads: %d", t);
     printf("# NBody (n=%d)\n", n);
     printf("# Elapsed time (sec): ttotal %.6f, tinit %.6f, tforces %.6f, tmove %.6f\n",
            ttotal, tinit, tforces, tmove);
+    char tmp[20];
+    serial(argc, argv);
+    sprintf(tmp, "%d\t\t%f\n", t, t_serial / ttotal);
+    strcat(buff, tmp);
+    }
+    strcat(buff, "\0");
     if (filename)
     {
         FILE *fout = fopen(filename, "w");
@@ -199,10 +213,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Can't save file\n");
             exit(EXIT_FAILURE);
         }
-        for (int i = 0; i < n; i++)
-        {
-            fprintf(fout, "%15f %15f %15f\n", p[i].x, p[i].y, p[i].z);
-        }
+        fwrite(buff, sizeof(char), strlen(buff), fout);
         fclose(fout);
     }
     free(m);

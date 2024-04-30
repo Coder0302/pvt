@@ -186,20 +186,30 @@ int main(int argc, char *argv[])
     for (int i = 0; i < n; i++)
         omp_init_lock(&locks[i]);
     double dt = 1e-5;
-#pragma omp parallel
+    char buff[100] = "# Threads   Speedup\n";
+    for (int t = 2; t <= 8; t+=2){
+    ttotal = wtime();
+    #pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
     {
         for (double t = 0; t <= 1; t += dt)
         {
             calculate_forces(p, f, m, n);
-#pragma omp barrier
+    #pragma omp barrier
             move_particles(p, f, v, m, n, dt);
-#pragma omp barrier
+    #pragma omp barrier
         }
     }
     ttotal = wtime() - ttotal;
+    printf("Threads: %d", t);
     printf("# NBody (n=%d)\n", n);
     printf("# Elapsed time (sec): ttotal %.6f, tinit %.6f, tforces %.6f, tmove %.6f\n",
            ttotal, tinit, tforces, tmove);
+    char tmp[20];
+    serial(argc, argv);
+    sprintf(tmp, "%d\t\t%f\n", t, t_serial / ttotal);
+    strcat(buff, tmp);
+    }
+    strcat(buff, "\0");
     if (filename)
     {
         FILE *fout = fopen(filename, "w");
@@ -208,10 +218,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Can't save file\n");
             exit(EXIT_FAILURE);
         }
-        for (int i = 0; i < n; i++)
-        {
-            fprintf(fout, "%15f %15f %15f\n", p[i].x, p[i].y, p[i].z);
-        }
+        fwrite(buff, sizeof(char), strlen(buff), fout);
         fclose(fout);
     }
     free(m);

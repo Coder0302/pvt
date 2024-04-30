@@ -162,7 +162,6 @@ void serial(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
     double ttotal, tinit = 0, tforces = 0, tmove = 0;
-    ttotal = wtime();
     int n = (argc > 1) ? atoi(argv[1]) : 10;
     char *filename = (argc > 2) ? argv[2] : NULL;
     tinit = -wtime();
@@ -185,6 +184,7 @@ int main(int argc, char *argv[])
     double dt = 1e-5;
     char buff[100] = "# Threads   Speedup\n";
     for (int t = 2; t<=8; t+=2){
+    ttotal = wtime();
     for (double t = 0; t <= 1; t += dt)
         { // Цикл по времени (модельному)
             tforces -= wtime();

@@ -19,7 +19,7 @@ double wtime()
     return (double)t.tv_sec + (double)t.tv_usec * 1E-6;
 }
 const float G = 6.67e-11;
-void calculate_forces(struct particle *p, struct particle *f, float *m, int n)
+void calculate_forces(struct particle *p, struct particle *f, float *m, int n, int t)
 {
 #pragma omp for schedule(dynamic, 4) nowait // Циклическое распределение итераций
     for (int i = 0; i < n - 1; i++)
@@ -47,7 +47,7 @@ void calculate_forces(struct particle *p, struct particle *f, float *m, int n)
     }
 }
 void move_particles(struct particle *p, struct particle *f, struct particle *v,
-                    float *m, int n, double dt)
+                    float *m, int n, double dt, int t)
 {
 #pragma omp for nowait
     for (int i = 0; i < n; i++)
@@ -182,20 +182,30 @@ int main(int argc, char *argv[])
     }
     tinit += wtime();
     double dt = 1e-5;
-#pragma omp parallel // Параллельный регион активируется один раз
-    {
-        for (double t = 0; t <= 1; t += dt)
+    char buff[100] = "# Threads   Speedup\n";
+    for (int t = 2; t <= 8; t+=2){
+        ttotal = wtime();
+        #pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
         {
-            calculate_forces(p, f, m, n);
-#pragma omp barrier // Ожидание завершения расчетов f[i]
-            move_particles(p, f, v, m, n, dt);
-#pragma omp barrier // Ожидание завершения обновления p[i], f[i]
+            for (double t = 0; t <= 1; t += dt)
+            {
+                calculate_forces(p, f, m, n, t);
+        #pragma omp barrier // Ожидание завершения расчетов f[i]
+                move_particles(p, f, v, m, n, dt, t);
+        #pragma omp barrier // Ожидание завершения обновления p[i], f[i]
+            }
         }
+        ttotal = wtime() - ttotal;
+        printf("Threads: %d", t);
+        printf("# NBody (n=%d)\n", n);
+        printf("# Elapsed time (sec): ttotal %.6f, tinit %.6f, tforces %.6f, tmove %.6f\n",
+            ttotal, tinit, tforces, tmove);
+        char tmp[20];
+        serial(argc, argv);
+        sprintf(tmp, "%d\t\t%f\n", t, t_serial / ttotal);
+        strcat(buff, tmp);
     }
-    ttotal = wtime() - ttotal;
-    printf("# NBody (n=%d)\n", n);
-    printf("# Elapsed time (sec): ttotal %.6f, tinit %.6f, tforces %.6f, tmove %.6f\n",
-           ttotal, tinit, tforces, tmove);
+    strcat(buff, "\0");
     if (filename)
     {
         FILE *fout = fopen(filename, "w");
@@ -204,10 +214,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Can't save file\n");
             exit(EXIT_FAILURE);
         }
-        for (int i = 0; i < n; i++)
-        {
-            fprintf(fout, "%15f %15f %15f\n", p[i].x, p[i].y, p[i].z);
-        }
+        fwrite(buff, sizeof(char), strlen(buff), fout);
         fclose(fout);
     }
     free(m);
