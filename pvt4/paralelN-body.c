@@ -124,7 +124,6 @@ void move_particles_serial(struct particle *p, struct particle *f, struct partic
 void serial(int argc, char *argv[])
 {
     double ttotal, tinit = 0, tforces = 0, tmove = 0;
-    ttotal = wtime();
     int n = (argc > 1) ? atoi(argv[1]) : 10;
     char *filename = (argc > 2) ? argv[2] : NULL;
     tinit = -wtime();
@@ -144,6 +143,7 @@ void serial(int argc, char *argv[])
     }
     tinit += wtime();
     double dt = 1e-5;
+    ttotal = wtime();
     for (double t = 0; t <= 1; t += dt) { // Цикл по времени (модельному)
         tforces -= wtime();
         calculate_forces_serial(p, f, m, n); // Вычисление сил – O(N^2)

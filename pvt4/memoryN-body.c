@@ -29,8 +29,6 @@ void calculate_forces(struct particle *p, struct particle *f[], float *m, int n,
         f[tid][i].y = 0;
         f[tid][i].z = 0;
     }
-#pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
-    {
 #pragma omp for schedule(dynamic, 8)
         for (int i = 0; i < n; i++)
         {
@@ -60,13 +58,10 @@ void calculate_forces(struct particle *p, struct particle *f[], float *m, int n,
                 }
             }
         }
-    }
 } // calculate_forces
 void move_particles(struct particle *p, struct particle *f[], struct particle *v, float *m, int n,
                     double dt, int t)
 {
-#pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
-    {
 #pragma omp for
         for (int i = 0; i < n; i++)
         {
@@ -88,7 +83,6 @@ void move_particles(struct particle *p, struct particle *f[], struct particle *v
             p[i].z += dp.z;
             // f[i].x = f[i].y = f[i].z = 0;
         }
-    }
 }
 
 void calculate_forces_serial(struct particle *p, struct particle *f, float *m, int n)
@@ -188,7 +182,6 @@ int main(int argc, char *argv[])
     char *filename = (argc > 2) ? argv[2] : NULL;
     tinit = -wtime();
     struct particle *p = malloc(sizeof(*p) * n); // Положение частиц (x, y, z)
-    // struct particle *f = malloc(sizeof(*f) * n); // Сила, действующая на каждую частицу (x, y, z)
     struct particle *v = malloc(sizeof(*v) * n); // Скорость частицы (x, y, z)
     float *m = malloc(sizeof(*m) * n);           // Масса частицы
     // printf("\n------%d--------\n", omp_get_max_threads());
@@ -226,7 +219,7 @@ int main(int argc, char *argv[])
             }
         }
         ttotal = wtime() - ttotal;
-        printf("Threads: %d", t);
+        printf("Threads: %d\n", t);
         printf("# NBody (n=%d)\n", n);
         printf("# Elapsed time (sec): ttotal %.6f, tinit %.6f, tforces %.6f, tmove %.6f\n",
                ttotal, tinit, tforces, tmove);
@@ -249,7 +242,8 @@ int main(int argc, char *argv[])
     }
     free(m);
     free(v);
-    free(f);
+    for (int i = 0; i < omp_get_max_threads(); i++)
+        free(f[i]);
     free(p);
     return 0;
 }

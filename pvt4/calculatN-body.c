@@ -21,8 +21,6 @@ double wtime()
 const float G = 6.67e-11;
 void calculate_forces(struct particle *p, struct particle *f, float *m, int n, int t)
 {
-    #pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
-    {
     #pragma omp for schedule(dynamic, 4) nowait
         for (int i = 0; i < n; i++)
         {
@@ -43,7 +41,6 @@ void calculate_forces(struct particle *p, struct particle *f, float *m, int n, i
                 f[i].z += mag * dir.z / dist;
             }
         }
-    }
 }
 
 void move_particles(struct particle *p, struct particle *f, struct particle *v, float *m, int n,
@@ -122,7 +119,6 @@ void move_particles_serial(struct particle *p, struct particle *f, struct partic
 void serial(int argc, char *argv[])
 {
     double ttotal, tinit = 0, tforces = 0, tmove = 0;
-    ttotal = wtime();
     int n = (argc > 1) ? atoi(argv[1]) : 10;
     char *filename = (argc > 2) ? argv[2] : NULL;
     tinit = -wtime();
@@ -142,6 +138,7 @@ void serial(int argc, char *argv[])
     }
     tinit += wtime();
     double dt = 1e-5;
+    ttotal = wtime();
     for (double t = 0; t <= 1; t += dt) { // Цикл по времени (модельному)
         tforces -= wtime();
         calculate_forces_serial(p, f, m, n); // Вычисление сил – O(N^2)
@@ -185,6 +182,8 @@ int main(int argc, char *argv[])
     for (int t = 2; t <= 8; t+=2){
     ttotal = wtime();
     
+    #pragma omp parallel num_threads(t) // Параллельный регион активируется один раз
+    {
     for (double t = 0; t <= 1; t += dt)
     { // Цикл по времени (модельному)
         tforces -= wtime();
@@ -193,6 +192,7 @@ int main(int argc, char *argv[])
         tmove -= wtime();
         move_particles(p, f, v, m, n, dt); // Перемещение тел O(N)
         tmove += wtime();
+    }
     }
     ttotal = wtime() - ttotal;
     printf("Threads: %d", t);
